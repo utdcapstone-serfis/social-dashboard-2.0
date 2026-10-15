@@ -34,3 +34,47 @@ export function formatCountdown(ms: number): string {
   const m = totalMinutes % 60;
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
+
+/* ------------------------------------------------------------------ */
+/* Dallas / US Central time: the dashboard's day starts at local midnight */
+/* ------------------------------------------------------------------ */
+
+export const DASHBOARD_TZ = "America/Chicago";
+
+const centralDate = new Intl.DateTimeFormat("en-CA", {
+  timeZone: DASHBOARD_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** YYYY-MM-DD of `d` on the Central-time calendar. */
+export function centralDateKey(d: Date): string {
+  return centralDate.format(d);
+}
+
+/**
+ * The instant of the next Central-time midnight after `d`. Midnight is 05:00 or
+ * 06:00 UTC depending on daylight saving, so try both and keep the one that is
+ * really 00:00 in Chicago.
+ */
+export function nextCentralMidnight(d: Date): Date {
+  const [y, m, day] = centralDateKey(d).split("-").map(Number);
+  for (const utcHour of [5, 6]) {
+    const candidate = new Date(Date.UTC(y, m - 1, day + 1, utcHour));
+    const hm = new Intl.DateTimeFormat("en-US", { timeZone: DASHBOARD_TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(candidate);
+    if (hm === "00:00") return candidate;
+  }
+  return new Date(Date.UTC(y, m - 1, day + 1, 6));
+}
+
+/** "Oct 14, 10:12 PM CT" */
+export function formatCentral(d: Date, withDate = true): string {
+  const text = d.toLocaleString("en-US", {
+    timeZone: DASHBOARD_TZ,
+    ...(withDate ? { month: "short", day: "numeric" } : {}),
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${text} CT`;
+}

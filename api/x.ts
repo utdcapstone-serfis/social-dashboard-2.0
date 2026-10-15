@@ -61,7 +61,24 @@ export interface XPayload {
   previousViews: Record<string, number>;
   /** Per-platform error messages; a platform with an error is omitted from `metrics`. */
   errors: Record<string, string>;
+  /** This account's most-viewed posts (from the same read, no extra cost). */
+  posts: TopPost[];
 }
+
+/** One post for the dashboard's "Top posts" panel. views is null when the API has no view count. */
+export interface TopPost {
+  platform: string;
+  id: string;
+  title: string;
+  url?: string;
+  views: number | null;
+  likes: number;
+  publishedAt?: string;
+}
+
+/** How many of this platform's posts to hand the dashboard. */
+const TOP_POSTS = 5;
+
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -159,6 +176,7 @@ export async function resolveUserId(): Promise<string> {
 
 interface Post {
   id: string;
+  text?: string;
   created_at?: string;
   public_metrics?: {
     impression_count?: number;
@@ -181,9 +199,9 @@ async function listPosts(userId: string): Promise<Post[]> {
 }
 
 /** Last successful result, reused for CACHE_TTL_MS to keep the per-post read bill down. */
-let cachedResult: { value: { metric: XMetric; previousViews: number }; expiresAt: number } | null = null;
+let cachedResult: { value: { metric: XMetric; previousViews: number; posts: TopPost[] }; expiresAt: number } | null = null;
 
-async function fetchX(): Promise<{ metric: XMetric; previousViews: number }> {
+async function fetchX(): Promise<{ metric: XMetric; previousViews: number; posts: TopPost[] }> {
   if (cachedResult && cachedResult.expiresAt > Date.now()) return cachedResult.value;
   if (!env("X_BEARER_TOKEN")) throw new Error("X_BEARER_TOKEN not configured");
 
@@ -206,6 +224,18 @@ async function fetchX(): Promise<{ metric: XMetric; previousViews: number }> {
     },
     // Lifetime counters with no stored history: report a flat day-over-day delta.
     previousViews: views,
+    posts: [...posts]
+      .sort((a, b) => (b.public_metrics?.impression_count ?? 0) - (a.public_metrics?.impression_count ?? 0))
+      .slice(0, TOP_POSTS)
+      .map((p) => ({
+        platform: "twitter",
+        id: p.id,
+        title: (p.text ?? "").replace(/\s+/g, " ").trim() || "Post",
+        url: `https://x.com/i/web/status/${p.id}`,
+        views: p.public_metrics?.impression_count ?? 0,
+        likes: p.public_metrics?.like_count ?? 0,
+        publishedAt: p.created_at,
+      })),
   };
   cachedResult = { value, expiresAt: Date.now() + CACHE_TTL_MS };
   return value;
@@ -223,12 +253,14 @@ export async function buildXPayload(requestedDay: Date): Promise<XPayload> {
     metrics: [],
     previousViews: {},
     errors: {},
+    posts: [],
   };
 
   try {
     const r = await fetchX();
     payload.metrics.push(r.metric);
     payload.previousViews.twitter = r.previousViews;
+    payload.posts = r.posts;
   } catch (err) {
     payload.errors.twitter = err instanceof Error ? err.message : String(err);
   }

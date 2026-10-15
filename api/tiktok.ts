@@ -54,7 +54,24 @@ export interface TikTokPayload {
   errors: Record<string, string>;
   /** Credential health the dashboard turns into "refresh your key" warnings. */
   tokens: Record<string, { expiresAt?: string; note?: string }>;
+  /** This account's most-viewed videos. */
+  posts: TopPost[];
 }
+
+/** One post for the dashboard's "Top posts" panel. views is null when the API has no view count. */
+export interface TopPost {
+  platform: string;
+  id: string;
+  title: string;
+  url?: string;
+  views: number | null;
+  likes: number;
+  publishedAt?: string;
+}
+
+/** How many of this platform's posts to hand the dashboard. */
+const TOP_POSTS = 5;
+
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -189,7 +206,7 @@ async function listVideos(token: string): Promise<Video[]> {
   return videos;
 }
 
-async function fetchTikTok(): Promise<{ metric: TikTokMetric; previousViews: number }> {
+async function fetchTikTok(): Promise<{ metric: TikTokMetric; previousViews: number; posts: TopPost[] }> {
   const token = await getAccessToken();
   const videos = await listVideos(token);
   const sum = (k: "view_count" | "like_count" | "share_count"): number =>
@@ -209,6 +226,18 @@ async function fetchTikTok(): Promise<{ metric: TikTokMetric; previousViews: num
     },
     // Lifetime counters with no stored history: report a flat day-over-day delta.
     previousViews: views,
+    posts: [...videos]
+      .sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0) || (b.like_count ?? 0) - (a.like_count ?? 0))
+      .slice(0, TOP_POSTS)
+      .map((v) => ({
+        platform: "tiktok",
+        id: v.id,
+        title: v.title?.trim() || "Untitled video",
+        url: v.share_url,
+        views: v.view_count ?? 0,
+        likes: v.like_count ?? 0,
+        publishedAt: v.create_time ? new Date(v.create_time * 1000).toISOString() : undefined,
+      })),
   };
 }
 
@@ -225,12 +254,14 @@ export async function buildTikTokPayload(requestedDay: Date): Promise<TikTokPayl
     previousViews: {},
     errors: {},
     tokens: {},
+    posts: [],
   };
 
   try {
     const r = await fetchTikTok();
     payload.metrics.push(r.metric);
     payload.previousViews.tiktok = r.previousViews;
+    payload.posts = r.posts;
   } catch (err) {
     payload.errors.tiktok = err instanceof Error ? err.message : String(err);
   }

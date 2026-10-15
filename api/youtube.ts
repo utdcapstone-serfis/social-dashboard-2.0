@@ -50,7 +50,24 @@ export interface YouTubePayload {
   previousViews: Record<string, number>;
   /** Per-platform error messages; a platform with an error is omitted from `metrics`. */
   errors: Record<string, string>;
+  /** The channel's most-viewed videos over the last 28 days. */
+  posts: TopPost[];
 }
+
+/** One post for the dashboard's "Top posts" panel. views is null when the API has no view count. */
+export interface TopPost {
+  platform: string;
+  id: string;
+  title: string;
+  url?: string;
+  views: number | null;
+  likes: number;
+  publishedAt?: string;
+}
+
+/** How many of this platform's posts to hand the dashboard. */
+const TOP_POSTS = 5;
+
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -175,15 +192,69 @@ async function ytDailySeries(
   return byDay;
 }
 
+const VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos";
+/** Window for ranking top videos; one day is too sparse for a small channel. */
+const TOP_WINDOW_DAYS = 28;
+
+/**
+ * Most-viewed videos over the last TOP_WINDOW_DAYS (Analytics, dimensions=video),
+ * with titles from the Data API. Best effort: [] on any failure so the channel
+ * card still renders.
+ */
+async function ytTopVideos(token: string, endDay: Date): Promise<TopPost[]> {
+  try {
+    const url = new URL(ANALYTICS_URL);
+    url.searchParams.set("ids", "channel==MINE");
+    url.searchParams.set("startDate", dateKey(new Date(endDay.getTime() - TOP_WINDOW_DAYS * DAY_SECONDS * 1000)));
+    url.searchParams.set("endDate", dateKey(endDay));
+    url.searchParams.set("metrics", "views,likes");
+    url.searchParams.set("dimensions", "video");
+    url.searchParams.set("sort", "-views");
+    url.searchParams.set("maxResults", String(TOP_POSTS));
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const body = (await res.json().catch(() => ({}))) as AnalyticsResponse;
+    if (!res.ok || !body.rows?.length) return [];
+
+    const headers = (body.columnHeaders ?? []).map((h) => h.name);
+    const col = (row: Array<string | number>, name: string) => row[headers.indexOf(name)];
+    const ids = body.rows.map((r) => String(col(r, "video")));
+
+    const titles: Record<string, { title?: string; publishedAt?: string }> = {};
+    const vurl = new URL(VIDEOS_URL);
+    vurl.searchParams.set("part", "snippet");
+    vurl.searchParams.set("id", ids.join(","));
+    const vres = await fetch(vurl, { headers: { Authorization: `Bearer ${token}` } });
+    const vbody = (await vres.json().catch(() => ({}))) as {
+      items?: Array<{ id: string; snippet?: { title?: string; publishedAt?: string } }>;
+    };
+    for (const item of vbody.items ?? []) titles[item.id] = item.snippet ?? {};
+
+    return body.rows.map((r) => {
+      const id = String(col(r, "video"));
+      return {
+        platform: "youtube",
+        id,
+        title: titles[id]?.title ?? "Untitled video",
+        url: `https://www.youtube.com/watch?v=${id}`,
+        views: Number(col(r, "views")) || 0,
+        likes: Number(col(r, "likes")) || 0,
+        publishedAt: titles[id]?.publishedAt,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 async function fetchYouTube(
   requestedDay: Date,
-): Promise<{ metric: YouTubeMetric; previousViews: number; liveDate: string }> {
+): Promise<{ metric: YouTubeMetric; previousViews: number; liveDate: string; posts: TopPost[] }> {
   const token = await getAccessToken();
 
   // Latest possible complete day is yesterday; look back far enough to cover the reporting lag.
   const newest = new Date(requestedDay.getTime() - DAY_SECONDS * 1000);
   const oldest = new Date(newest.getTime() - LOOKBACK_DAYS * DAY_SECONDS * 1000);
-  const byDay = await ytDailySeries(token, oldest, newest);
+  const [byDay, posts] = await Promise.all([ytDailySeries(token, oldest, newest), ytTopVideos(token, newest)]);
 
   const days = Object.keys(byDay).sort();
   if (days.length === 0) {
@@ -212,6 +283,7 @@ async function fetchYouTube(
     },
     previousViews: prev.views ?? 0,
     liveDate: liveKey,
+    posts,
   };
 }
 
@@ -227,6 +299,7 @@ export async function buildYouTubePayload(requestedDay: Date): Promise<YouTubePa
     metrics: [],
     previousViews: {},
     errors: {},
+    posts: [],
   };
 
   try {
@@ -234,6 +307,7 @@ export async function buildYouTubePayload(requestedDay: Date): Promise<YouTubePa
     payload.metrics.push(r.metric);
     payload.previousViews.youtube = r.previousViews;
     payload.liveDate = r.liveDate;
+    payload.posts = r.posts;
   } catch (err) {
     payload.errors.youtube = err instanceof Error ? err.message : String(err);
   }

@@ -57,7 +57,24 @@ export interface BlueskyPayload {
   previousViews: Record<string, number>;
   /** Per-platform error messages; a platform with an error is omitted from `metrics`. */
   errors: Record<string, string>;
+  /** This account's most-liked posts (Bluesky has no view counts). */
+  posts: TopPost[];
 }
+
+/** One post for the dashboard's "Top posts" panel. views is null when the API has no view count. */
+export interface TopPost {
+  platform: string;
+  id: string;
+  title: string;
+  url?: string;
+  views: number | null;
+  likes: number;
+  publishedAt?: string;
+}
+
+/** How many of this platform's posts to hand the dashboard. */
+const TOP_POSTS = 5;
+
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -130,6 +147,8 @@ interface Profile {
 interface FeedItem {
   post: {
     uri?: string;
+    indexedAt?: string;
+    record?: { text?: string; createdAt?: string };
     likeCount?: number;
     repostCount?: number;
     quoteCount?: number;
@@ -154,9 +173,9 @@ async function listPosts(actor: string): Promise<FeedItem[]> {
 }
 
 /** Last successful result, reused for CACHE_TTL_MS. */
-let cachedResult: { value: { metric: BlueskyMetric; previousViews: number }; expiresAt: number } | null = null;
+let cachedResult: { value: { metric: BlueskyMetric; previousViews: number; posts: TopPost[] }; expiresAt: number } | null = null;
 
-async function fetchBluesky(): Promise<{ metric: BlueskyMetric; previousViews: number }> {
+async function fetchBluesky(): Promise<{ metric: BlueskyMetric; previousViews: number; posts: TopPost[] }> {
   if (cachedResult && cachedResult.expiresAt > Date.now()) return cachedResult.value;
 
   const actor = resolveHandle();
@@ -178,6 +197,22 @@ async function fetchBluesky(): Promise<{ metric: BlueskyMetric; previousViews: n
     },
     // No views, so no view history either.
     previousViews: 0,
+    posts: [...posts]
+      .sort((a, b) => (b.post?.likeCount ?? 0) - (a.post?.likeCount ?? 0))
+      .slice(0, TOP_POSTS)
+      .map((item) => {
+        // at://did/app.bsky.feed.post/<rkey> -> https://bsky.app/profile/<handle>/post/<rkey>
+        const rkey = item.post?.uri?.split("/").pop();
+        return {
+          platform: "bluesky",
+          id: item.post?.uri ?? rkey ?? "",
+          title: item.post?.record?.text?.replace(/\s+/g, " ").trim() || "Post",
+          url: rkey ? `https://bsky.app/profile/${profile.handle ?? actor}/post/${rkey}` : undefined,
+          views: null,
+          likes: item.post?.likeCount ?? 0,
+          publishedAt: item.post?.record?.createdAt ?? item.post?.indexedAt,
+        };
+      }),
   };
   cachedResult = { value, expiresAt: Date.now() + CACHE_TTL_MS };
   return value;
@@ -195,12 +230,14 @@ export async function buildBlueskyPayload(requestedDay: Date): Promise<BlueskyPa
     metrics: [],
     previousViews: {},
     errors: {},
+    posts: [],
   };
 
   try {
     const r = await fetchBluesky();
     payload.metrics.push(r.metric);
     payload.previousViews.bluesky = r.previousViews;
+    payload.posts = r.posts;
   } catch (err) {
     payload.errors.bluesky = err instanceof Error ? err.message : String(err);
   }

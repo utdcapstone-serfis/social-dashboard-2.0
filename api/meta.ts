@@ -48,7 +48,24 @@ export interface MetaPayload {
   errors: Record<string, string>;
   /** Credential health the dashboard turns into "refresh your key" warnings. */
   tokens: Record<string, { expiresAt?: string; note?: string }>;
+  /** Most-engaging recent Instagram and Facebook posts. */
+  posts: TopPost[];
 }
+
+/** One post for the dashboard's "Top posts" panel. views is null when the API has no view count. */
+export interface TopPost {
+  platform: string;
+  id: string;
+  title: string;
+  url?: string;
+  views: number | null;
+  likes: number;
+  publishedAt?: string;
+}
+
+/** How many of each platform's posts to hand the dashboard. */
+const TOP_POSTS = 5;
+
 
 interface GraphError {
   error?: { message?: string; code?: number; error_subcode?: number };
@@ -341,6 +358,89 @@ async function fetchFacebook(
 }
 
 /* ------------------------------------------------------------------ */
+/* top posts                                                           */
+/* ------------------------------------------------------------------ */
+
+const oneLine = (text: string | undefined, fallback: string): string =>
+  text?.replace(/\s+/g, " ").trim() || fallback;
+
+/**
+ * Instagram: the most-liked of the latest 25 media, then a per-media views
+ * lookup for just those few. Best effort: [] on any failure.
+ */
+async function igTopPosts(version: string, igUserId: string, token: string): Promise<TopPost[]> {
+  try {
+    const body = await graphGet<{
+      data?: Array<{ id: string; caption?: string; permalink?: string; timestamp?: string; like_count?: number }>;
+    }>(version, `${igUserId}/media`, { fields: "id,caption,permalink,timestamp,like_count", limit: "25" }, token);
+    const top = [...(body.data ?? [])]
+      .sort((a, b) => (b.like_count ?? 0) - (a.like_count ?? 0))
+      .slice(0, TOP_POSTS);
+    return await Promise.all(
+      top.map(async (m) => {
+        let views: number | null = null;
+        try {
+          const ins = await graphGet<{ data?: Array<{ name: string; values?: Array<{ value: number }> }> }>(
+            version,
+            `${m.id}/insights`,
+            { metric: "views" },
+            token,
+          );
+          views = ins.data?.[0]?.values?.[0]?.value ?? null;
+        } catch {
+          /* older media types have no views insight */
+        }
+        return {
+          platform: "instagram",
+          id: m.id,
+          title: oneLine(m.caption, "Instagram post"),
+          url: m.permalink,
+          views,
+          likes: m.like_count ?? 0,
+          publishedAt: m.timestamp,
+        };
+      }),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Facebook: the most-reacted of the Page's latest 25 posts. Best effort: [] on any failure. */
+async function fbTopPosts(version: string, pageId: string, token: string): Promise<TopPost[]> {
+  try {
+    const body = await graphGet<{
+      data?: Array<{
+        id: string;
+        message?: string;
+        permalink_url?: string;
+        created_time?: string;
+        reactions?: { summary?: { total_count?: number } };
+      }>;
+    }>(
+      version,
+      `${pageId}/published_posts`,
+      { fields: "id,message,permalink_url,created_time,reactions.summary(total_count).limit(0)", limit: "25" },
+      token,
+    );
+    return [...(body.data ?? [])]
+      .sort((a, b) => (b.reactions?.summary?.total_count ?? 0) - (a.reactions?.summary?.total_count ?? 0))
+      .slice(0, TOP_POSTS)
+      .map((p) => ({
+        platform: "facebook",
+        id: p.id,
+        title: oneLine(p.message, "Facebook post"),
+        url: p.permalink_url,
+        views: null,
+        likes: p.reactions?.summary?.total_count ?? 0,
+        publishedAt: p.created_time,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* token health                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -387,6 +487,7 @@ export async function buildMetaPayload(requestedDay: Date): Promise<MetaPayload>
     previousViews: {},
     errors: {},
     tokens: {},
+    posts: [],
   };
 
   const [results, igToken, fbToken] = await Promise.all([
@@ -396,6 +497,17 @@ export async function buildMetaPayload(requestedDay: Date): Promise<MetaPayload>
   ]);
   if (igToken) payload.tokens.instagram = igToken;
   if (fbToken) payload.tokens.facebook = fbToken;
+
+  // Posts only for accounts whose insights worked, so a bad token reports one error, not two.
+  const igId = env("META_IG_USER_ID");
+  const igTok = env("META_ACCESS_TOKEN");
+  const pageId = env("META_PAGE_ID");
+  const pageTok = env("META_PAGE_ACCESS_TOKEN") ?? igTok;
+  const [igPosts, fbPosts] = await Promise.all([
+    results[0].status === "fulfilled" && igId && igTok ? igTopPosts(version, igId, igTok) : [],
+    results[1].status === "fulfilled" && pageId && pageTok ? fbTopPosts(version, pageId, pageTok) : [],
+  ]);
+  payload.posts = [...igPosts, ...fbPosts];
 
   results.forEach((r, i) => {
     const id = i === 0 ? "instagram" : "facebook";

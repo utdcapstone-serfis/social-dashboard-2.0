@@ -1,4 +1,4 @@
-import type { DailyPayload, PlatformDailyMetric, TokenHealth } from "../types";
+import type { DailyPayload, PlatformDailyMetric, TokenHealth, TopPost } from "../types";
 
 /** Shape returned by the Vercel functions in /api/meta.ts, /api/youtube.ts, /api/tiktok.ts, /api/x.ts, /api/pinterest.ts and /api/bluesky.ts. */
 export interface LiveApiResponse {
@@ -9,6 +9,7 @@ export interface LiveApiResponse {
   previousViews: Record<string, number>;
   errors: Record<string, string>;
   tokens: Record<string, TokenHealth>;
+  posts: TopPost[];
 }
 
 /** @deprecated use LiveApiResponse */
@@ -36,6 +37,7 @@ async function fetchEndpoint(path: string, date: string): Promise<LiveApiRespons
       previousViews: body.previousViews ?? {},
       errors: body.errors ?? {},
       tokens: body.tokens ?? {},
+      posts: Array.isArray(body.posts) ? body.posts : [],
     };
   } catch {
     return null;
@@ -60,12 +62,14 @@ export async function fetchLivePayload(day: Date): Promise<LiveApiResponse | nul
     previousViews: {},
     errors: {},
     tokens: {},
+    posts: [],
   };
   for (const r of available) {
     combined.metrics.push(...r.metrics);
     Object.assign(combined.previousViews, r.previousViews);
     Object.assign(combined.errors, r.errors);
     Object.assign(combined.tokens, r.tokens);
+    combined.posts.push(...r.posts);
   }
   return combined;
 }
@@ -85,6 +89,7 @@ export function mergeLivePayload(base: DailyPayload, live: LiveApiResponse): Dai
     apiReachable: true,
     errors: live.errors,
     tokens: live.tokens,
+    posts: live.posts,
   };
 }
 

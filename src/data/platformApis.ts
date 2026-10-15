@@ -109,6 +109,7 @@ export const PLATFORM_APIS: Partial<Record<PlatformName, PlatformApiProfile>> = 
     envVars: ["X_BEARER_TOKEN", "X_USER_ID"],
     keyLifetime: "Bearer token: no expiry until regenerated; reads use prepaid credits",
     fix: [
+      "X_USER_ID not configured: double-click 'Set X Account.bat' and enter the Serfis X handle (without the @).",
       "Sign in at console.x.com → your project → app → Keys and tokens.",
       "401/403: regenerate the Bearer Token and paste it into X_BEARER_TOKEN in .env.local and Vercel.",
       "402 or a credits message: add credits under Billing (X charges per post read).",

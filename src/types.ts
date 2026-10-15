@@ -59,6 +59,21 @@ export interface DailyPayload {
   errors?: Record<string, string>;
   /** Per-platform credential health from the last live sync. */
   tokens?: Record<string, TokenHealth>;
+  /** Real posts from the connected accounts (never demo). */
+  posts?: TopPost[];
+}
+
+/** One real post from a connected account, for the "Top posts" panel. */
+export interface TopPost {
+  /** Platform id, e.g. "tiktok", "instagram". */
+  platform: string;
+  id: string;
+  title: string;
+  url?: string;
+  /** null when the platform exposes no view count (Facebook posts, Bluesky). */
+  views: number | null;
+  likes: number;
+  publishedAt?: string;
 }
 
 /** What an /api endpoint knows about the credential it used. */

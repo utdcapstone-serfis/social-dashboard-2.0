@@ -46,6 +46,8 @@ export interface MetaPayload {
   previousViews: Record<string, number>;
   /** Per-platform error messages; a platform with an error is omitted from `metrics`. */
   errors: Record<string, string>;
+  /** Credential health the dashboard turns into "refresh your key" warnings. */
+  tokens: Record<string, { expiresAt?: string; note?: string }>;
 }
 
 interface GraphError {
@@ -339,6 +341,35 @@ async function fetchFacebook(
 }
 
 /* ------------------------------------------------------------------ */
+/* token health                                                        */
+/* ------------------------------------------------------------------ */
+
+interface DebugTokenResponse {
+  data?: { is_valid?: boolean; expires_at?: number; data_access_expires_at?: number };
+}
+
+/**
+ * Asks Graph's debug_token when a token stops working: the earlier of the token
+ * expiry (0 = never, e.g. Page tokens from a long-lived user token) and the
+ * 90-day data-access window. Best effort: returns undefined on any failure.
+ */
+async function tokenHealth(
+  version: string,
+  token: string | undefined,
+): Promise<{ expiresAt?: string; note?: string } | undefined> {
+  if (!token) return undefined;
+  try {
+    const body = await graphGet<DebugTokenResponse>(version, "debug_token", { input_token: token }, token);
+    const d = body.data ?? {};
+    if (d.is_valid === false) return { note: "Meta reports this token as invalid." };
+    const ends = [d.expires_at, d.data_access_expires_at].filter((n): n is number => !!n && n > 0);
+    return ends.length > 0 ? { expiresAt: new Date(Math.min(...ends) * 1000).toISOString() } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* handler                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -355,12 +386,16 @@ export async function buildMetaPayload(requestedDay: Date): Promise<MetaPayload>
     metrics: [],
     previousViews: {},
     errors: {},
+    tokens: {},
   };
 
-  const results = await Promise.allSettled([
-    fetchInstagram(version, liveDay, prevDay),
-    fetchFacebook(version, liveDay, prevDay),
+  const [results, igToken, fbToken] = await Promise.all([
+    Promise.allSettled([fetchInstagram(version, liveDay, prevDay), fetchFacebook(version, liveDay, prevDay)]),
+    tokenHealth(version, env("META_ACCESS_TOKEN")),
+    tokenHealth(version, env("META_PAGE_ACCESS_TOKEN") ?? env("META_ACCESS_TOKEN")),
   ]);
+  if (igToken) payload.tokens.instagram = igToken;
+  if (fbToken) payload.tokens.facebook = fbToken;
 
   results.forEach((r, i) => {
     const id = i === 0 ? "instagram" : "facebook";

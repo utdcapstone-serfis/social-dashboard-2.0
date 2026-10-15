@@ -123,7 +123,8 @@ async function xGet<T>(path: string, params: Record<string, string>): Promise<XE
   if (!res.ok || body.errors?.length) {
     const first = body.errors?.[0];
     const detail = first?.detail ?? first?.message ?? body.detail ?? body.title ?? `HTTP ${res.status}`;
-    throw new Error(`X API ${path}: ${detail}`);
+    // Keep the status in the message: the dashboard uses it to tell an invalid token (401/403) from no credits (402).
+    throw new Error(`X API ${path} (HTTP ${res.status}): ${detail}`);
   }
   return body;
 }

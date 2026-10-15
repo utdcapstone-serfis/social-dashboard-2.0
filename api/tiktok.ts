@@ -52,6 +52,8 @@ export interface TikTokPayload {
   previousViews: Record<string, number>;
   /** Per-platform error messages; a platform with an error is omitted from `metrics`. */
   errors: Record<string, string>;
+  /** Credential health the dashboard turns into "refresh your key" warnings. */
+  tokens: Record<string, { expiresAt?: string; note?: string }>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -88,6 +90,8 @@ interface TokenResponse {
   access_token?: string;
   expires_in?: number;
   refresh_token?: string;
+  /** Seconds until the refresh token itself expires (365 days at issue). */
+  refresh_expires_in?: number;
   error?: string;
   error_description?: string;
 }
@@ -96,6 +100,8 @@ interface TokenResponse {
 let cachedToken: { value: string; expiresAt: number } | null = null;
 /** TikTok may hand back a rotated refresh token; prefer the newest one this instance has seen. */
 let latestRefreshToken: string | null = null;
+/** What the last refresh said about the stored refresh token, for the dashboard's key-health panel. */
+let refreshTokenHealth: { expiresAt?: string; note?: string } = {};
 
 async function getAccessToken(): Promise<string> {
   const clientKey = env("TIKTOK_CLIENT_KEY");
@@ -122,8 +128,14 @@ async function getAccessToken(): Promise<string> {
     const detail = body.error_description ?? body.error ?? `HTTP ${res.status}`;
     throw new Error(`TikTok token refresh failed: ${detail}`);
   }
+  refreshTokenHealth = {
+    expiresAt: body.refresh_expires_in
+      ? new Date(Date.now() + body.refresh_expires_in * 1000).toISOString()
+      : undefined,
+  };
   if (body.refresh_token && body.refresh_token !== refreshToken) {
     latestRefreshToken = body.refresh_token;
+    refreshTokenHealth.note = "TikTok rotated the refresh token; the stored TIKTOK_REFRESH_TOKEN is now stale.";
     console.warn(
       "[tiktok] TikTok rotated the refresh token; update TIKTOK_REFRESH_TOKEN before this instance is recycled.",
     );
@@ -212,6 +224,7 @@ export async function buildTikTokPayload(requestedDay: Date): Promise<TikTokPayl
     metrics: [],
     previousViews: {},
     errors: {},
+    tokens: {},
   };
 
   try {
@@ -221,6 +234,7 @@ export async function buildTikTokPayload(requestedDay: Date): Promise<TikTokPayl
   } catch (err) {
     payload.errors.tiktok = err instanceof Error ? err.message : String(err);
   }
+  if (refreshTokenHealth.expiresAt || refreshTokenHealth.note) payload.tokens.tiktok = refreshTokenHealth;
   return payload;
 }
 

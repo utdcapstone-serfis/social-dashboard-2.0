@@ -2,6 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Serfis brand tokens (from serfis-site: ink #0F032D, lavender #905BF4,
+ * violet #4E2BCC, blue #3B5BFF, paper #F5F1FF, live #3BE08C). Stored as
+ * "r g b" triplets so Tailwind's /<alpha> modifiers work.
+ */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 6 3 15;
+  --panel: 12 7 34;
+  --panel-2: 22 14 56;
+  --line: 40 28 86;
+  --ink: 239 236 250;
+  --muted: 150 140 190;
+  --accent: 144 91 244;
+  --accent-2: 59 91 255;
+  --good: 59 224 140;
+  --bad: 255 112 140;
+  --warn: 251 191 36;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: 245 241 255;
+  --panel: 255 255 255;
+  --panel-2: 238 232 255;
+  --line: 222 212 250;
+  --ink: 15 3 45;
+  --muted: 88 76 128;
+  --accent: 109 63 224;
+  --accent-2: 59 91 255;
+  --good: 21 128 61;
+  --bad: 190 18 60;
+  --warn: 161 98 7;
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-bg font-sans text-ink antialiased;
+}
+
+/* Small uppercase mono labels, as on the Serfis site. */
+.label {
+  @apply font-mono text-[11px] uppercase tracking-[0.18em] text-muted;
+}
+
+.panel {
+  @apply rounded-2xl border border-line bg-panel;
 }

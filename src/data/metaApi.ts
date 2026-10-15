@@ -1,6 +1,6 @@
-import type { DailyPayload, PlatformDailyMetric } from "../types";
+import type { DailyPayload, PlatformDailyMetric, TokenHealth } from "../types";
 
-/** Shape returned by the Vercel functions in /api/meta.ts, /api/youtube.ts, /api/tiktok.ts and /api/x.ts. */
+/** Shape returned by the Vercel functions in /api/meta.ts, /api/youtube.ts, /api/tiktok.ts, /api/x.ts, /api/pinterest.ts and /api/bluesky.ts. */
 export interface LiveApiResponse {
   date: string;
   liveDate: string;
@@ -8,13 +8,14 @@ export interface LiveApiResponse {
   metrics: PlatformDailyMetric[];
   previousViews: Record<string, number>;
   errors: Record<string, string>;
+  tokens: Record<string, TokenHealth>;
 }
 
 /** @deprecated use LiveApiResponse */
 export type MetaApiResponse = LiveApiResponse;
 
 /** Live endpoints, in display priority order (the first one's liveDate wins). */
-const LIVE_ENDPOINTS = ["/api/meta", "/api/youtube", "/api/tiktok", "/api/x"] as const;
+const LIVE_ENDPOINTS = ["/api/meta", "/api/youtube", "/api/tiktok", "/api/x", "/api/pinterest", "/api/bluesky"] as const;
 
 /**
  * Fetches one serverless endpoint. Resolves to null when it is unavailable
@@ -34,6 +35,7 @@ async function fetchEndpoint(path: string, date: string): Promise<LiveApiRespons
       metrics: body.metrics,
       previousViews: body.previousViews ?? {},
       errors: body.errors ?? {},
+      tokens: body.tokens ?? {},
     };
   } catch {
     return null;
@@ -57,11 +59,13 @@ export async function fetchLivePayload(day: Date): Promise<LiveApiResponse | nul
     metrics: [],
     previousViews: {},
     errors: {},
+    tokens: {},
   };
   for (const r of available) {
     combined.metrics.push(...r.metrics);
     Object.assign(combined.previousViews, r.previousViews);
     Object.assign(combined.errors, r.errors);
+    Object.assign(combined.tokens, r.tokens);
   }
   return combined;
 }
@@ -78,6 +82,9 @@ export function mergeLivePayload(base: DailyPayload, live: LiveApiResponse): Dai
     liveDate: live.liveDate,
     metrics: base.metrics.map((m) => liveById.get(m.id) ?? { ...m, source: "mock" }),
     previousViews: { ...base.previousViews, ...live.previousViews },
+    apiReachable: true,
+    errors: live.errors,
+    tokens: live.tokens,
   };
 }
 

@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tiktok:auth": "node --env-file-if-exists=.env.local scripts/tiktok-auth.ts",
-    "x:id": "node --env-file-if-exists=.env.local scripts/x-user-id.ts"
+    "x:id": "node --env-file-if-exists=.env.local scripts/x-user-id.ts",
+    "pinterest:auth": "node --env-file-if-exists=.env.local scripts/pinterest-auth.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

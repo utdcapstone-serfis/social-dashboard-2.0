@@ -170,3 +170,108 @@ Notes:
   so expect about 24 requests of up to 100 posts per day per instance.
 - A `401` in `/api/x` errors means the Bearer Token was regenerated or revoked;
   a `403` means the tier does not include the endpoint.
+
+## Pinterest (live data via `api/pinterest.ts`)
+
+The Pinterest card goes live through `GET /api/pinterest`. It needs three more
+environment variables, locally in `.env.local` and on Vercel for Production
+and Preview:
+
+| Name | Value |
+| --- | --- |
+| `PINTEREST_APP_ID` | App ID from developers.pinterest.com -> **My apps** -> your app |
+| `PINTEREST_APP_SECRET` | the matching App secret (shown on the same card once Trial access is approved) |
+| `PINTEREST_REFRESH_TOKEN` | continuous refresh token written by `npm run pinterest:auth` (see below) |
+
+Setup, once:
+
+1. Sign in to <https://developers.pinterest.com> with the Serfis Pinterest
+   **business** account (the API's account analytics only exist for business
+   accounts, and apps registered after 14 Sep 2026 cannot read personal
+   accounts' Pins at all). Convert the account to a business account first if
+   needed, verify its email, and accept the Developer Terms under **My apps**.
+2. Click **Connect app**, fill in the form (name, description, use case: internal
+   analytics dashboard for the account's own content; privacy policy
+   `https://serfis-site.vercel.app/privacy`) and submit the request for
+   **Trial access**. Pinterest reviews on business days and emails the result;
+   the App ID and App secret appear on the app card once approved. Trial access
+   is all this dashboard needs: it reads only the owning account, and Pin and
+   account analytics are included.
+3. On the app card choose **Manage -> Configure -> Redirect URIs**, enter
+   `https://serfis-site.vercel.app/pinterest/callback` and click **Add**. The
+   value must match exactly (no trailing slash).
+4. Put the App ID and secret in `.env.local`, then run `npm run pinterest:auth`
+   (or double-click `Connect Pinterest.bat`). Open the printed link while signed
+   in to the Serfis Pinterest account, click **Give access**, copy the code from
+   the Serfis page that opens, and paste it into the terminal. The script
+   exchanges it and writes `PINTEREST_REFRESH_TOKEN`.
+5. Copy the same three values into the Vercel environment variables and verify
+   with `https://<your-project>.vercel.app/api/pinterest`.
+
+Notes:
+
+- The function calls `GET /v5/user_account/analytics` (scope
+  `user_accounts:read`) for the last 8 days and reports the newest day whose
+  `data_status` is `READY` (falling back to `ESTIMATE`) as `liveDate`, so the
+  day-over-day delta is real. Mapping: views = `IMPRESSION`, likes per view =
+  `SAVE` / `IMPRESSION`, share rate = `OUTBOUND_CLICK` / `IMPRESSION`.
+  Retention is `QUARTILE_95_PERCENT_VIEW` / `VIDEO_START` when Pinterest returns
+  video metrics for the account, otherwise it renders as *n/a*.
+- Trial access allows 1,000 requests per day per app in total. The function
+  keeps the last result in memory for an hour and sets an hour-long edge cache,
+  so expect well under 50 requests a day.
+- **Token rotation.** Access tokens last 30 days. Continuous refresh tokens last
+  60 days and every refresh returns a new one, so the value stored in Vercel
+  slowly ages. The function keeps the newest token in memory and logs
+  `Pinterest rotated the refresh token` when it happens. Before 60 days pass,
+  run `npm run pinterest:auth -- --refresh` (it swaps the token in `.env.local`
+  and prints the new expiry) and update the Vercel variable. If it has already
+  expired, `/api/pinterest` reports a token refresh error: run
+  `npm run pinterest:auth` again to reconnect.
+- A `403` in `/api/pinterest` errors usually means the account is not a
+  business account or the `user_accounts:read` scope was not granted; a `429`
+  means the daily Trial quota is used up.
+
+## Bluesky (live data via `api/bluesky.ts`)
+
+The Bluesky card goes live through `GET /api/bluesky`. It needs one more
+environment variable, locally in `.env.local` and on Vercel for Production and
+Preview:
+
+| Name | Value |
+| --- | --- |
+| `BLUESKY_HANDLE` | the account handle to track, e.g. `serfis.bsky.app` (a DID also works) |
+
+No developer app, token or OAuth flow is needed: the function reads the public
+AppView at `public.api.bsky.app`, which serves profiles and author feeds without
+authentication. Set the variable and verify with
+`https://<your-project>.vercel.app/api/bluesky`.
+
+Notes:
+
+- Bluesky exposes no view or impression counts, so the card shows 0 views and
+  0.0% retention, and the day-over-day delta is 0. The function sums `likeCount`,
+  `repostCount` and `quoteCount` across the latest 100 original posts (replies
+  and reposts of other accounts excluded) and divides by `followersCount`:
+  likes per view = likes / followers, share rate = (reposts + quotes) /
+  followers.
+- The public AppView is rate limited per IP at about 3,000 requests per 5
+  minutes. The function makes two requests per refresh, keeps the last result
+  in memory for an hour and sets an hour-long edge cache.
+- A `Profile not found` error in `/api/bluesky` means the handle is misspelled
+  or the account was renamed; a `429` means the AppView rate limit was hit.
+
+## API key health on the dashboard
+
+The **API connections** panel (and the red "keys need attention" pill in the header) is driven by the
+`errors` and `tokens` fields every `/api/*` endpoint returns:
+
+- An endpoint error is classified as *not configured*, *key expired/rejected*, *out of credits* (X),
+  *rate limited* or a generic API error. Clicking a platform shows the raw error, which env vars hold
+  its key, and step-by-step fix instructions (`src/data/platformApis.ts`).
+- Where the platform tells us when a key stops working, the panel counts down and turns amber
+  14 days before expiry: Meta via Graph `debug_token` (user token expiry and the 90-day data-access
+  window), TikTok from the refresh response (365 days), and Pinterest from
+  `PINTEREST_REFRESH_TOKEN_EXPIRES_AT`, which `npm run pinterest:auth` now writes next to the token
+  (copy both to Vercel). A rotated TikTok/Pinterest refresh token is flagged too.
+- YouTube and X give no expiry up front; they show up as soon as a call is rejected.

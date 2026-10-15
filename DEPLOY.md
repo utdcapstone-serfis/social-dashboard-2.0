@@ -17,6 +17,19 @@ npm run dev
 `vite.config.ts`), so the Vercel CLI is not required locally. `.env.local` is
 git-ignored and is never bundled into the browser build.
 
+On Windows the double-click scripts in the project folder do the same:
+
+| Script | What it does |
+| --- | --- |
+| `Start Dashboard.bat` | Starts the dev server on :5173 and warns about empty keys in `.env.local` |
+| `Restart Dashboard.bat` | Stop + Start; run after editing `.env.local` |
+| `Stop Dashboard.bat` | Stops the dev server and the production preview |
+| `Check API Keys.bat` | `npm run keys:check`: which keys work, are missing or expired, days left |
+| `Connect TikTok.bat` | `npm run tiktok:auth`: new TikTok refresh token |
+| `Connect Pinterest.bat` | Connect Pinterest, or rotate the 60-day refresh token |
+| `Set X Account.bat` | `npm run x:id`: saves the X account's `X_USER_ID` |
+| `Build and Preview.bat` | Production build on :4173 (no `/api`, so demo data) |
+
 ## 2. Push the repo to GitHub
 
 Vercel deploys from a Git repository. Make sure `.env.local` is **not**

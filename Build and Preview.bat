@@ -22,7 +22,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Build OK. Note: the preview server has no /api routes, so all platforms show mock data.
+echo Build OK. Note: the preview server has no /api routes, so all platforms show demo data and
+echo API connections reads "API offline". Use "Start Dashboard.bat" for live data.
 
 rem Stop a previous preview so the new build is what gets served.
 powershell -NoProfile -Command "$pids = Get-NetTCPConnection -LocalPort 4173 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($id in $pids) { taskkill /PID $id /T /F | Out-Null }"

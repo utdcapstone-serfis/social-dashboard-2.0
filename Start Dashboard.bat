@@ -15,14 +15,18 @@ if not exist node_modules (
 
 if not exist .env.local (
   echo.
-  echo WARNING: .env.local not found. Instagram, Facebook, YouTube, TikTok and X will show mock data.
-  echo Copy .env.example to .env.local and fill in the META_*, YOUTUBE_*, TIKTOK_* and X_* values.
+  echo WARNING: .env.local not found. Every platform will show demo data.
+  echo Copy .env.example to .env.local and fill in the META_*, YOUTUBE_*, TIKTOK_*, X_*, PINTEREST_* and BLUESKY_* values.
   echo.
 ) else (
   findstr /R /C:"^META_ACCESS_TOKEN=." .env.local >nul || echo WARNING: META_ACCESS_TOKEN is empty in .env.local - Instagram/Facebook will show mock data.
   findstr /R /C:"^YOUTUBE_REFRESH_TOKEN=." .env.local >nul || echo WARNING: YOUTUBE_REFRESH_TOKEN is empty in .env.local - YouTube will show mock data.
   findstr /R /C:"^TIKTOK_REFRESH_TOKEN=." .env.local >nul || echo WARNING: TIKTOK_REFRESH_TOKEN is empty in .env.local - TikTok will show mock data. Run: npm run tiktok:auth
   findstr /R /C:"^X_BEARER_TOKEN=." .env.local >nul || echo WARNING: X_BEARER_TOKEN is empty in .env.local - Twitter/X will show mock data.
+  findstr /R /C:"^X_USER_ID=." /C:"^X_USERNAME=." .env.local >nul || echo WARNING: X_USER_ID is empty in .env.local - Twitter/X will show mock data. Run "Set X Account.bat".
+  findstr /R /C:"^PINTEREST_REFRESH_TOKEN=." .env.local >nul || echo WARNING: PINTEREST_REFRESH_TOKEN is empty in .env.local - Pinterest will show mock data. Run "Connect Pinterest.bat".
+  findstr /R /C:"^BLUESKY_HANDLE=." .env.local >nul || echo WARNING: BLUESKY_HANDLE is empty in .env.local - Bluesky will show mock data.
+  echo Expired or expiring keys show up in the dashboard's API connections panel, or run "Check API Keys.bat".
 )
 
 rem If a server is already listening on 5173, just open the browser instead of failing on --strictPort.

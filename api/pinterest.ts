@@ -312,9 +312,10 @@ export async function buildPinterestPayload(requestedDay: Date): Promise<Pintere
   }
   // Written by `npm run pinterest:auth`; the only reliable expiry for the stored token.
   const storedExpiry = env("PINTEREST_REFRESH_TOKEN_EXPIRES_AT");
-  if (storedExpiry || refreshTokenHealth.note) {
-    payload.tokens.pinterest = { ...refreshTokenHealth, expiresAt: storedExpiry };
-  }
+  // With a known expiry the rotation note is just noise: the dashboard warns 14 days before
+  // that date. Without one, the note is the only signal that the stored token is aging.
+  if (storedExpiry) payload.tokens.pinterest = { expiresAt: storedExpiry };
+  else if (refreshTokenHealth.note) payload.tokens.pinterest = refreshTokenHealth;
   return payload;
 }
 

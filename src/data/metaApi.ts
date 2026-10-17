@@ -1,6 +1,6 @@
 import type { DailyPayload, PlatformDailyMetric, TokenHealth, TopPost } from "../types";
 
-/** Shape returned by the Vercel functions in /api/meta.ts, /api/youtube.ts, /api/tiktok.ts, /api/x.ts, /api/pinterest.ts and /api/bluesky.ts. */
+/** Shape returned by the Vercel functions in /api/meta.ts, /api/youtube.ts, /api/tiktok.ts, /api/x.ts, /api/pinterest.ts, /api/snapchat.ts, /api/linkedin.ts and /api/bluesky.ts. */
 export interface LiveApiResponse {
   date: string;
   liveDate: string;
@@ -16,7 +16,7 @@ export interface LiveApiResponse {
 export type MetaApiResponse = LiveApiResponse;
 
 /** Live endpoints, in display priority order (the first one's liveDate wins). */
-const LIVE_ENDPOINTS = ["/api/meta", "/api/youtube", "/api/tiktok", "/api/x", "/api/pinterest", "/api/bluesky"] as const;
+const LIVE_ENDPOINTS = ["/api/meta", "/api/youtube", "/api/tiktok", "/api/x", "/api/pinterest", "/api/snapchat", "/api/linkedin", "/api/bluesky"] as const;
 
 /**
  * Fetches one serverless endpoint. Resolves to null when it is unavailable

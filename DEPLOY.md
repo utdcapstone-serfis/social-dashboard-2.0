@@ -27,6 +27,8 @@ On Windows the double-click scripts in the project folder do the same:
 | `Check API Keys.bat` | `npm run keys:check`: which keys work, are missing or expired, days left |
 | `Connect TikTok.bat` | `npm run tiktok:auth`: new TikTok refresh token |
 | `Connect Pinterest.bat` | Connect Pinterest, or rotate the 60-day refresh token |
+| `Connect Snapchat.bat` | Connect Snapchat (Marketing API) |
+| `Connect LinkedIn.bat` | Connect the LinkedIn Company Page (Community Management API) |
 | `Set X Account.bat` | `npm run x:id`: saves the X account's `X_USER_ID` |
 | `Build and Preview.bat` | Production build on :4173 (no `/api`, so demo data) |
 
@@ -244,6 +246,60 @@ Notes:
 - A `403` in `/api/pinterest` errors usually means the account is not a
   business account or the `user_accounts:read` scope was not granted; a `429`
   means the daily Trial quota is used up.
+
+## Snapchat (live data via `api/snapchat.ts`)
+
+Snapchat has no open analytics API for organic posts, so the Snapchat card shows
+**paid ad-account stats** from the Snap Marketing API. With no running ads it
+reports zeros. Env vars (`.env.local` and Vercel):
+
+| Name | Value |
+| --- | --- |
+| `SNAPCHAT_CLIENT_ID` / `SNAPCHAT_CLIENT_SECRET` | OAuth app at business.snapchat.com -> Business Details -> **OAuth Apps** |
+| `SNAPCHAT_AD_ACCOUNT_ID` | Business Settings -> **Ad Accounts** |
+| `SNAPCHAT_REFRESH_TOKEN` | written by `npm run snapchat:auth` |
+| `SNAPCHAT_TIMEZONE` | optional IANA zone of the ad account (default `America/Chicago`) |
+
+Setup: create the OAuth app with redirect URI
+`https://serfis-site.vercel.app/snapchat/callback` (deploy `site/` first), fill in
+the ID, secret and ad account ID, then run `Connect Snapchat.bat`, approve access
+and paste the code. Mapping: views = impressions, likes per view = saves /
+impressions, share rate = shares / impressions, retention = video completions /
+video views. A `400` usually means `SNAPCHAT_TIMEZONE` does not match the ad
+account; a `403` means the authorizing user lacks access to that ad account.
+
+## LinkedIn (live data via `api/linkedin.ts`)
+
+The LinkedIn card shows **Company Page post statistics** from the Community
+Management API (`/rest/organizationalEntityShareStatistics`, daily). LinkedIn
+offers no personal-profile analytics. Env vars (`.env.local` and Vercel):
+
+| Name | Value |
+| --- | --- |
+| `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | developer.linkedin.com -> your app -> **Auth** |
+| `LINKEDIN_REFRESH_TOKEN` | written by `npm run linkedin:auth` |
+| `LINKEDIN_REFRESH_TOKEN_EXPIRES_AT` | written by the same script; the dashboard warns 14 days before |
+| `LINKEDIN_ORGANIZATION_ID` | numeric Company Page id; the auth script fills it in when it can |
+| `LINKEDIN_API_VERSION` | optional `YYYYMM` for the `LinkedIn-Version` header (default `202510`) |
+
+Setup, once:
+
+1. Create the app at developer.linkedin.com, associate it with the Serfis
+   Company Page and have a page admin verify it.
+2. On the **Products** tab request the **Community Management API**
+   (Development tier is enough). Until LinkedIn approves it the
+   `r_organization_*` scopes are not available and the card stays on demo data.
+3. On **Auth** add the redirect URL `https://serfis-site.vercel.app/linkedin/callback`
+   (deploy `site/` first).
+4. Fill in the client ID and secret, run `Connect LinkedIn.bat`, sign in as a page
+   **administrator**, approve access and paste the code.
+5. Copy the `LINKEDIN_*` values to Vercel and redeploy.
+
+Mapping: views = impressions, likes per view = likes / impressions, share rate =
+shares / impressions; LinkedIn reports no retention, so that cell shows n/a. Access
+tokens last 60 days, refresh tokens 365 days and are not rotated: re-run the auth
+script before the expiry. A `403` means the page admin or Community Management
+approval is missing; a `426` means `LINKEDIN_API_VERSION` has been retired.
 
 ## Bluesky (live data via `api/bluesky.ts`)
 

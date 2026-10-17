@@ -24,10 +24,12 @@ export interface PlatformDailyMetric {
    * came from the YouTube Analytics API via /api/youtube, "tiktok" when it came
    * from the TikTok Display API via /api/tiktok, "x" when it came from the X API v2
    * user timeline via /api/x, "pinterest" when it came from the Pinterest API v5
-   * account analytics via /api/pinterest, "bluesky" when it came from the Bluesky
+   * account analytics via /api/pinterest, "snapchat" when it came from the Snap Marketing API
+   * ad-account stats via /api/snapchat, "linkedin" when it came from the LinkedIn Community
+   * Management API page statistics via /api/linkedin, "bluesky" when it came from the Bluesky
    * public AppView via /api/bluesky; otherwise mock.
    */
-  source?: "meta" | "youtube" | "tiktok" | "x" | "pinterest" | "bluesky" | "mock";
+  source?: "meta" | "youtube" | "tiktok" | "x" | "pinterest" | "snapchat" | "linkedin" | "bluesky" | "mock";
 }
 
 /** Static presentation data for a platform. */

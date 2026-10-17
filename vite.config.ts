@@ -4,17 +4,17 @@ import react from "@vitejs/plugin-react";
 /**
  * Dev-only: serves the serverless functions in api/ at /api/<name> so
  * `npm run dev` works without the Vercel CLI. META_*, YOUTUBE_*, TIKTOK_*, X_*,
- * PINTEREST_* and BLUESKY_* values come from .env.local and stay on the server
+ * PINTEREST_*, SNAPCHAT_*, LINKEDIN_* and BLUESKY_* values come from .env.local and stay on the server
  * side; Vite only exposes VITE_* variables to the browser.
  */
-const LOCAL_API_ROUTES = ["meta", "youtube", "tiktok", "x", "pinterest", "bluesky"] as const;
+const LOCAL_API_ROUTES = ["meta", "youtube", "tiktok", "x", "pinterest", "snapchat", "linkedin", "bluesky"] as const;
 
 function localApi(mode: string): Plugin {
   return {
     name: "local-api",
     apply: "serve",
     configureServer(server) {
-      Object.assign(process.env, loadEnv(mode, process.cwd(), ["META_", "YOUTUBE_", "TIKTOK_", "X_", "PINTEREST_", "BLUESKY_"]));
+      Object.assign(process.env, loadEnv(mode, process.cwd(), ["META_", "YOUTUBE_", "TIKTOK_", "X_", "PINTEREST_", "SNAPCHAT_", "LINKEDIN_", "BLUESKY_"]));
       for (const name of LOCAL_API_ROUTES) {
         server.middlewares.use(`/api/${name}`, async (req, res) => {
           try {

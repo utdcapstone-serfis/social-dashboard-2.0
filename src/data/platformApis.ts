@@ -132,6 +132,38 @@ export const PLATFORM_APIS: Partial<Record<PlatformName, PlatformApiProfile>> = 
       "Copy PINTEREST_REFRESH_TOKEN and PINTEREST_REFRESH_TOKEN_EXPIRES_AT from .env.local into Vercel and redeploy, then press Reload.",
     ],
   },
+  Snapchat: {
+    api: "Snap Marketing API",
+    window: "daily",
+    windowLabel: "Daily ad-account stats (paid only)",
+    views: "Ad impressions",
+    retention: "Video completions ÷ video views",
+    likes: "Saves ÷ impressions",
+    share: "Shares ÷ impressions",
+    envVars: ["SNAPCHAT_REFRESH_TOKEN", "SNAPCHAT_CLIENT_ID", "SNAPCHAT_CLIENT_SECRET", "SNAPCHAT_AD_ACCOUNT_ID"],
+    keyLifetime: "Refresh token: long-lived until revoked",
+    fix: [
+      "Not connected yet, or revoked: fill in SNAPCHAT_CLIENT_ID, SNAPCHAT_CLIENT_SECRET and SNAPCHAT_AD_ACCOUNT_ID, then double-click 'Connect Snapchat.bat' (npm run snapchat:auth).",
+      "Approve access as the Snapchat user that manages the Serfis ad account.",
+      "Copy the SNAPCHAT_* values from .env.local into Vercel and redeploy, then press Reload.",
+    ],
+  },
+  LinkedIn: {
+    api: "LinkedIn Community Management API",
+    window: "daily",
+    windowLabel: "Daily Company Page post stats",
+    views: "Post impressions",
+    retention: null,
+    likes: "Likes ÷ impressions",
+    share: "Shares ÷ impressions",
+    envVars: ["LINKEDIN_REFRESH_TOKEN", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "LINKEDIN_ORGANIZATION_ID"],
+    keyLifetime: "Refresh token: 365 days, not rotated",
+    fix: [
+      "Not connected yet, or expired: fill in LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET, then double-click 'Connect LinkedIn.bat' (npm run linkedin:auth) and approve access as an administrator of the Serfis Company Page.",
+      "403 errors: the app needs the Community Management API product approved, and the authorizing member must be a page ADMINISTRATOR.",
+      "Copy the LINKEDIN_* values (including LINKEDIN_REFRESH_TOKEN_EXPIRES_AT) from .env.local into Vercel and redeploy, then press Reload.",
+    ],
+  },
   Bluesky: {
     api: "Bluesky public AppView",
     window: "lifetime",
@@ -248,7 +280,8 @@ export function assessConnections(payload: DailyPayload, now: Date): ConnectionS
     if (daysLeft !== undefined && daysLeft < 0) {
       return { ...base, state: "expired", summary: STATE_SUMMARY.expired, detail: token?.note, daysLeft, needsAction: true };
     }
-    if ((daysLeft !== undefined && daysLeft <= EXPIRY_WARN_DAYS) || token?.note) {
+    // A note (e.g. "refresh token rotated") only warns when there is no expiry date to go by.
+    if (daysLeft !== undefined ? daysLeft <= EXPIRY_WARN_DAYS : !!token?.note) {
       const summary = daysLeft !== undefined ? `Key expires in ${daysLeft}d` : "Key rotated, update env var";
       return { ...base, state: "expiring", summary, detail: token?.note, daysLeft, needsAction: true };
     }

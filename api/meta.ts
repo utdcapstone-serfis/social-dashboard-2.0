@@ -24,6 +24,8 @@
 
 const GRAPH_HOST = "https://graph.facebook.com";
 const DAY_SECONDS = 24 * 60 * 60;
+/** Meta insights window is 2 years; stay a little inside it. */
+const MAX_LOOKBACK_DAYS = 700;
 
 interface MetaMetric {
   id: "instagram" | "facebook";
@@ -523,7 +525,23 @@ export async function buildMetaPayload(requestedDay: Date): Promise<MetaPayload>
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const payload = await buildMetaPayload(parseDateParam(url.searchParams.get("date")));
+  let requested = parseDateParam(url.searchParams.get("date"));
+
+  // Meta only serves insights for the last 2 years and never for the future
+  // (e.g. the dashboard's simulated day offset), else it answers "(#100) since param is not valid".
+  const todayUtc = new Date(`${dateKey(new Date())}T00:00:00.000Z`);
+  if (requested.getTime() > todayUtc.getTime()) requested = todayUtc;
+  const oldest = new Date(todayUtc.getTime() - MAX_LOOKBACK_DAYS * DAY_SECONDS * 1000);
+  if (requested.getTime() < oldest.getTime()) {
+    return new Response(
+      JSON.stringify({
+        error: `date ${dateKey(requested)} is too old: Meta only provides insights for the last 2 years (earliest ${dateKey(oldest)}).`,
+      }),
+      { status: 400, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } },
+    );
+  }
+
+  const payload = await buildMetaPayload(requested);
   const allFailed = payload.metrics.length === 0;
   return new Response(JSON.stringify(payload), {
     status: allFailed ? 502 : 200,

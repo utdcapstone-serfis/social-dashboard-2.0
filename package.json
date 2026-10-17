@@ -10,6 +10,8 @@
     "tiktok:auth": "node --env-file-if-exists=.env.local scripts/tiktok-auth.ts",
     "x:id": "node --env-file-if-exists=.env.local scripts/x-user-id.ts",
     "pinterest:auth": "node --env-file-if-exists=.env.local scripts/pinterest-auth.ts",
+    "snapchat:auth": "node --env-file-if-exists=.env.local scripts/snapchat-auth.ts",
+    "linkedin:auth": "node --env-file-if-exists=.env.local scripts/linkedin-auth.ts",
     "keys:check": "node --env-file-if-exists=.env.local scripts/check-keys.ts"
   },
   "dependencies": {
